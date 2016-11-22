@@ -29,5 +29,8 @@
     <ClInclude Include="glCamera.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="MeshIO.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

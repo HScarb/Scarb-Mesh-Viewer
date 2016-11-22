@@ -10,6 +10,7 @@ MyMeshViewer
 #include <gl/glut.h>
 #include "glCamera.h"
 #include <vector>
+#include "MeshIO.h"
 using namespace std;
 #define M_PI 3.14159265358979323846
 #define UNIT 0.3f
@@ -54,6 +55,74 @@ GLboolean mouseldown = GL_FALSE;
 GLboolean mousemdown = GL_FALSE;
 
 vector<V3f> vertexVector;
+
+bool readPointers()
+{
+	if (file_name.find(".hex") != file_name.size() - 4)
+	{
+		std::cerr << "Error : not a .hex file!" << std::endl;
+		return false;
+	}
+	std::ifstream fs(file_name.c_str());
+
+	int lineCount;
+	char   buffer[_INPUTLINESIZE_];
+	char * buff;
+	char * next_str;
+	unsigned int nv;
+	unsigned int nt;
+	int firstLineNumber;
+	lineCount = 0;
+	nv = 0;
+	nt = 0;
+	firstLineNumber = 1;
+
+	std::vector<typename MeshT::Point> pc;
+	std::vector<unsigned int>  vc;
+	double v[3];
+	int idx[9];
+
+	while ((buff = read_line_chars(buffer, fs, lineCount)) != NULL)
+	{
+		//trim_str(buffer);
+		if (buff[0] != '#')
+		{
+			if ((buffer[0] == 'v') || (buffer[0] == 'V'))
+			{
+				next_str = buff;
+				for (unsigned int i = 0; i < 3; i++)
+				{
+					next_str = find_next_sub_str(next_str);
+					//std::istringstream ss(std::string(next_str));
+					//ss >> v[i];
+					v[i] = atof(next_str);
+				}
+				pc.push_back(typename MeshT::Point(v[0], v[1], v[2]));
+				++nv;
+
+
+			}
+
+			if ((buffer[0] == 'h') || (buffer[0] == 'H'))
+			{
+				next_str = buffer;
+				for (unsigned int i = 0; i < 8; i++)
+				{
+					next_str = find_next_sub_str(next_str);
+					//std::istringstream ss(std::string(next_str));
+					//ss >> idx[i];
+					idx[i] = atoi(next_str);
+					vc.push_back(idx[i] - 1);
+				}
+				++nt;
+				//break;
+			}
+
+		} // end of if '#'
+	} // end of while
+	fs.close();
+	_mesh.set_points(pc);
+}
 
 void setupPointers()
 {
@@ -202,35 +271,10 @@ void setupPointers()
 void setupPointersByArray()
 {
 	v_cnt = 0;
-	for (Mesh::HedronIter h_it = mesh.hedrons_begin(); h_it != mesh.hedrons_end(); ++h_it)
-	{
-		// --- using the circulator to access the vertices of a hedron ---
-		for (Mesh::HedronVertexIter hv_it = mesh.hedron_vertex_iter(h_it); hv_it; ++hv_it)
-		{
-			/*Mesh::Point v;
-			v = mesh.point(hv_it.handle());
-			vertices[v_cnt++] = v[0] * UNIT;
-			vertices[v_cnt++] = v[1] * UNIT;
-			vertices[v_cnt++] = v[2] * UNIT;*/
-			v_cnt += 3;
-		}
-	}
+
+
 	vertices = new GLfloat[v_cnt];
-	v_cnt = 0;
-	for (Mesh::HedronIter h_it = mesh.hedrons_begin(); h_it != mesh.hedrons_end(); ++h_it)
-	{
-		// --- using the circulator to access the vertices of a hedron ---
-		for (Mesh::HedronVertexIter hv_it = mesh.hedron_vertex_iter(h_it); hv_it; ++hv_it)
-		{
-			Mesh::Point v;
-			v = mesh.point(hv_it.handle());
-			vertices[v_cnt++] = v[0] * UNIT;
-			vertices[v_cnt++] = v[1] * UNIT;
-			vertices[v_cnt++] = v[2] * UNIT;
-			vertexVector.push_back(V3f(v[0], v[1], v[2]));
-		}
-	}
-	v_cnt /= 3;
+
 	cout << "Total vertices: " << v_cnt << endl;
 
 	/*glEnableClientState(GL_VERTEX_ARRAY);
@@ -881,12 +925,6 @@ int main(int argc, char * argv[])
 	cin >> file_name;
 	cout << "hex or tet: ";
 	cin >> file_format;
-
-	if (!OVM::IO::read_mesh(mesh, file_name))
-	{
-		cerr << "Cannot open the file!" << endl;
-		return 0;
-	}
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);

@@ -89,6 +89,7 @@
   <ItemGroup>
     <ClInclude Include="eigen.h" />
     <ClInclude Include="glCamera.h" />
+    <ClInclude Include="MeshIO.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
