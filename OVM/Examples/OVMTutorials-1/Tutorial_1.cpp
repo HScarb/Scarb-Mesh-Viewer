@@ -11,9 +11,10 @@ MyMeshViewer
 #include "glCamera.h"
 #include <vector>
 #include "MeshIO.h"
+#include <ctime>
 using namespace std;
 #define M_PI 3.14159265358979323846
-#define UNIT 0.3f
+#define UNIT 0.25f
 #define MAXARRAYSUM 100000
 typedef OVM::THMesh_ArrayKernelT<> Mesh;
 
@@ -42,7 +43,8 @@ static GLCamera * cam = nullptr;
 string file_name;
 string file_format;
 Mesh mesh;
-int v_cnt;
+unsigned int v_cnt;
+unsigned int h_cnt;
 GLushort * item_indices;
 GLushort * wire_indices;
 // store vertices and sequence
@@ -72,21 +74,20 @@ bool readPoints()
 	char   buffer[_INPUTLINESIZE_];
 	char * buff;
 	char * next_str;
-	unsigned int nv, nt, nf, ns;
+	unsigned int nv, nt;
 	int firstLineNumber;
 	lineCount = 0;
 	nv = 0;		// num of vertices
-	nf = 0;		// num float
 	nt = 0;		// num of tet
-	ns = 0;		// num of sequence
 	firstLineNumber = 1;
+	vector<GLfloat> tempV;
+	vector<GLint> tempH;
 
 	double v[3];
 	int idx[9];
+	double start, end, tdiff;
 
-	vertices = new GLfloat;
-	sequence = new GLint;
-
+	start = clock();
 	while ((buff = read_line_chars(buffer, fs, lineCount)) != NULL)
 	{
 		//trim_str(buffer);
@@ -100,7 +101,7 @@ bool readPoints()
 					next_str = find_next_sub_str(next_str);
 					//std::istringstream ss(std::string(next_str));
 					//ss >> v[i];
-					vertices[nf++] = atof(next_str);
+					tempV.push_back(atof(next_str));
 				}
 				++nv;
 
@@ -116,7 +117,8 @@ bool readPoints()
 					//std::istringstream ss(std::string(next_str));
 					//ss >> idx[i];
 					idx[i] = atoi(next_str);
-					sequence[ns++] = idx[i] - 1;
+					tempH.push_back(idx[i] - 1);
+//					sequence[ns++] = idx[i] - 1;
 				}
 				++nt;
 				//break;
@@ -125,111 +127,96 @@ bool readPoints()
 		} // end of if '#'
 	} // end of while
 	fs.close();
+	end = clock();
+
+	vertices = new GLfloat[tempV.size()];
+	sequence = new GLint[tempH.size()];
+	for (int i = 0; i < tempV.size(); i++)
+		vertices[i] = tempV[i] * UNIT;
+	vector<GLfloat>(tempV).swap(tempV);		// clear tempV
+	for (int i = 0; i < tempH.size(); i++)
+		sequence[i] = tempH[i];
+	vector<GLint>(tempH).swap(tempH);		// clear tempS
 
 	v_cnt = nv;
+	h_cnt = nt;
+	tdiff = end - start;
+	cout << "Time use: " << tdiff << endl;
 	cout << "Total vertices: " << v_cnt << endl;
+	cout << "Total tet: " << nt << endl;
 
 	return true;
 }
 
 void setupPointers()
 {
-	v_cnt = 0;
-	for (Mesh::HedronIter h_it = mesh.hedrons_begin(); h_it != mesh.hedrons_end(); ++h_it)
-	{
-		// --- using the circulator to access the vertices of a hedron ---
-		for (Mesh::HedronVertexIter hv_it = mesh.hedron_vertex_iter(h_it); hv_it; ++hv_it)
-		{
-			/*Mesh::Point v;
-			v = mesh.point(hv_it.handle());
-			vertices[v_cnt++] = v[0] * UNIT;
-			vertices[v_cnt++] = v[1] * UNIT;
-			vertices[v_cnt++] = v[2] * UNIT;*/
-			v_cnt += 3;
-		}
-	}
-	vertices = new GLfloat[v_cnt];
-	v_cnt = 0;
-	for (Mesh::HedronIter h_it = mesh.hedrons_begin(); h_it != mesh.hedrons_end(); ++h_it)
-	{
-		// --- using the circulator to access the vertices of a hedron ---
-		for (Mesh::HedronVertexIter hv_it = mesh.hedron_vertex_iter(h_it); hv_it; ++hv_it)
-		{
-			Mesh::Point v;
-			v = mesh.point(hv_it.handle());
-			vertices[v_cnt++] = v[0] * UNIT;
-			vertices[v_cnt++] = v[1] * UNIT;
-			vertices[v_cnt++] = v[2] * UNIT;
-			vertexVector.push_back(V3f(v[0], v[1], v[2]));
-		}
-	}
-	v_cnt /= 3;
-	cout << "Total vertices: " << v_cnt << endl;
-	glEnableClientState(GL_VERTEX_ARRAY);
+	readPoints();
 
+	glEnableClientState(GL_VERTEX_ARRAY);
 	glVertexPointer(3, GL_FLOAT, 0, vertices);
+
 	if (file_format == "hex")
 	{
-		const int indexNum = v_cnt * 3;
+		const int indexNum = h_cnt * 24;
 		item_indices = new GLushort[indexNum];
 		wire_indices = new GLushort[indexNum];
 		cout << "indexNum: " << indexNum << endl;
 		const int step1 = 24;
 		const int step2 = 8;
 
-		for (int cnt = 0; cnt < (v_cnt / 8); cnt++)
+		for (int cnt = 0; cnt < h_cnt; cnt++)
 		{
 			// item indices
-			item_indices[cnt * step1 + 0] = 0 + step2 * cnt;
-			item_indices[cnt * step1 + 1] = 1 + step2 * cnt;
-			item_indices[cnt * step1 + 2] = 2 + step2 * cnt;
-			item_indices[cnt * step1 + 3] = 3 + step2 * cnt;
-			item_indices[cnt * step1 + 4] = 0 + step2 * cnt;
-			item_indices[cnt * step1 + 5] = 1 + step2 * cnt;
-			item_indices[cnt * step1 + 6] = 5 + step2 * cnt;
-			item_indices[cnt * step1 + 7] = 4 + step2 * cnt;
-			item_indices[cnt * step1 + 8] = 5 + step2 * cnt;
-			item_indices[cnt * step1 + 9] = 4 + step2 * cnt;
-			item_indices[cnt * step1 + 10] = 7 + step2 * cnt;
-			item_indices[cnt * step1 + 11] = 6 + step2 * cnt;
-			item_indices[cnt * step1 + 12] = 2 + step2 * cnt;
-			item_indices[cnt * step1 + 13] = 3 + step2 * cnt;
-			item_indices[cnt * step1 + 14] = 7 + step2 * cnt;
-			item_indices[cnt * step1 + 15] = 6 + step2 * cnt;
-			item_indices[cnt * step1 + 16] = 1 + step2 * cnt;
-			item_indices[cnt * step1 + 17] = 2 + step2 * cnt;
-			item_indices[cnt * step1 + 18] = 6 + step2 * cnt;
-			item_indices[cnt * step1 + 19] = 5 + step2 * cnt;
-			item_indices[cnt * step1 + 20] = 0 + step2 * cnt;
-			item_indices[cnt * step1 + 21] = 3 + step2 * cnt;
-			item_indices[cnt * step1 + 22] = 7 + step2 * cnt;
-			item_indices[cnt * step1 + 23] = 4 + step2 * cnt;
+			item_indices[cnt * step1 + 0] = sequence[0 + step2 * cnt];
+			item_indices[cnt * step1 + 1] = sequence[1 + step2 * cnt];
+			item_indices[cnt * step1 + 2] = sequence[2 + step2 * cnt];
+			item_indices[cnt * step1 + 3] = sequence[3 + step2 * cnt];
+			item_indices[cnt * step1 + 4] = sequence[0 + step2 * cnt];
+			item_indices[cnt * step1 + 5] = sequence[1 + step2 * cnt];
+			item_indices[cnt * step1 + 6] = sequence[5 + step2 * cnt];
+			item_indices[cnt * step1 + 7] = sequence[4 + step2 * cnt];
+			item_indices[cnt * step1 + 8] = sequence[5 + step2 * cnt];
+			item_indices[cnt * step1 + 9] = sequence[4 + step2 * cnt];
+			item_indices[cnt * step1 + 10] = sequence[7 + step2 * cnt];
+			item_indices[cnt * step1 + 11] = sequence[6 + step2 * cnt];
+			item_indices[cnt * step1 + 12] = sequence[2 + step2 * cnt];
+			item_indices[cnt * step1 + 13] = sequence[3 + step2 * cnt];
+			item_indices[cnt * step1 + 14] = sequence[7 + step2 * cnt];
+			item_indices[cnt * step1 + 15] = sequence[6 + step2 * cnt];
+			item_indices[cnt * step1 + 16] = sequence[1 + step2 * cnt];
+			item_indices[cnt * step1 + 17] = sequence[2 + step2 * cnt];
+			item_indices[cnt * step1 + 18] = sequence[6 + step2 * cnt];
+			item_indices[cnt * step1 + 19] = sequence[5 + step2 * cnt];
+			item_indices[cnt * step1 + 20] = sequence[0 + step2 * cnt];
+			item_indices[cnt * step1 + 21] = sequence[3 + step2 * cnt];
+			item_indices[cnt * step1 + 22] = sequence[7 + step2 * cnt];
+			item_indices[cnt * step1 + 23] = sequence[4 + step2 * cnt];
 			// wire indices
-			wire_indices[cnt * step1 + 0] = 0 + step2 * cnt;
-			wire_indices[cnt * step1 + 1] = 1 + step2 * cnt;
-			wire_indices[cnt * step1 + 2] = 1 + step2 * cnt;
-			wire_indices[cnt * step1 + 3] = 2 + step2 * cnt;
-			wire_indices[cnt * step1 + 4] = 2 + step2 * cnt;
-			wire_indices[cnt * step1 + 5] = 3 + step2 * cnt;
-			wire_indices[cnt * step1 + 6] = 3 + step2 * cnt;
-			wire_indices[cnt * step1 + 7] = 0 + step2 * cnt;
-			wire_indices[cnt * step1 + 8] = 0 + step2 * cnt;
-			wire_indices[cnt * step1 + 9] = 4 + step2 * cnt;
-			wire_indices[cnt * step1 + 10] = 4 + step2 * cnt;
-			wire_indices[cnt * step1 + 11] = 5 + step2 * cnt;
-			wire_indices[cnt * step1 + 12] = 5 + step2 * cnt;
-			wire_indices[cnt * step1 + 13] = 6 + step2 * cnt;
-			wire_indices[cnt * step1 + 14] = 6 + step2 * cnt;
-			wire_indices[cnt * step1 + 15] = 7 + step2 * cnt;
-			wire_indices[cnt * step1 + 16] = 7 + step2 * cnt;
-			wire_indices[cnt * step1 + 17] = 4 + step2 * cnt;
-			wire_indices[cnt * step1 + 18] = 3 + step2 * cnt;
-			wire_indices[cnt * step1 + 19] = 7 + step2 * cnt;
-			wire_indices[cnt * step1 + 20] = 2 + step2 * cnt;
-			wire_indices[cnt * step1 + 21] = 6 + step2 * cnt;
-			wire_indices[cnt * step1 + 22] = 1 + step2 * cnt;
-			wire_indices[cnt * step1 + 23] = 5 + step2 * cnt;
-		}
+			wire_indices[cnt * step1 + 0] = sequence[0 + step2 * cnt];
+			wire_indices[cnt * step1 + 1] = sequence[1 + step2 * cnt];
+			wire_indices[cnt * step1 + 2] = sequence[1 + step2 * cnt];
+			wire_indices[cnt * step1 + 3] = sequence[2 + step2 * cnt];
+			wire_indices[cnt * step1 + 4] = sequence[2 + step2 * cnt];
+			wire_indices[cnt * step1 + 5] = sequence[3 + step2 * cnt];
+			wire_indices[cnt * step1 + 6] = sequence[3 + step2 * cnt];
+			wire_indices[cnt * step1 + 7] = sequence[0 + step2 * cnt];
+			wire_indices[cnt * step1 + 8] = sequence[0 + step2 * cnt];
+			wire_indices[cnt * step1 + 9] = sequence[4 + step2 * cnt];
+			wire_indices[cnt * step1 + 10] = sequence[4 + step2 * cnt];
+			wire_indices[cnt * step1 + 11] = sequence[5 + step2 * cnt];
+			wire_indices[cnt * step1 + 12] = sequence[5 + step2 * cnt];
+			wire_indices[cnt * step1 + 13] = sequence[6 + step2 * cnt];
+			wire_indices[cnt * step1 + 14] = sequence[6 + step2 * cnt];
+			wire_indices[cnt * step1 + 15] = sequence[7 + step2 * cnt];
+			wire_indices[cnt * step1 + 16] = sequence[7 + step2 * cnt];
+			wire_indices[cnt * step1 + 17] = sequence[4 + step2 * cnt];
+			wire_indices[cnt * step1 + 18] = sequence[3 + step2 * cnt];
+			wire_indices[cnt * step1 + 19] = sequence[7 + step2 * cnt];
+			wire_indices[cnt * step1 + 20] = sequence[2 + step2 * cnt];
+			wire_indices[cnt * step1 + 21] = sequence[6 + step2 * cnt];
+			wire_indices[cnt * step1 + 22] = sequence[1 + step2 * cnt];
+			wire_indices[cnt * step1 + 23] = sequence[5 + step2 * cnt];
+		}		
 	}
 	// tet
 	else
@@ -278,11 +265,10 @@ void setupPointers()
 // 将顶点数据读取，并且为DrawArrays排序
 void setupPointersByArray()
 {
-	readPoints();
-	
-
-	/*glEnableClientState(GL_VERTEX_ARRAY);
-	glVertexPointer(3, GL_FLOAT, 0, vertices);*/
+/*
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glVertexPointer(3, GL_FLOAT, 0, vertices);
+*/
 
 	if (file_format == "hex")
 	{
@@ -785,7 +771,7 @@ void display2()
 	// hex
 	if(file_format == "hex")
 	{
-		const int indexNum = v_cnt * 3;
+		const int indexNum = h_cnt * 24;
 
 		glColor3f(0.3f, 0.8f, 0.3f);
 		glDrawElements(GL_QUADS, indexNum, GL_UNSIGNED_SHORT, item_indices);
@@ -803,9 +789,11 @@ void display2()
 		glDrawElements(GL_LINES, indexNum, GL_UNSIGNED_SHORT, wire_indices);
 	}
 
-	/*glEnable(GL_COLOR_MATERIAL);
+/*
+	glEnable(GL_COLOR_MATERIAL);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	glDisableClientState(GL_VERTEX_ARRAY);*/
+	glDisableClientState(GL_VERTEX_ARRAY);
+*/
 
 	glutSwapBuffers();
 }
@@ -909,7 +897,7 @@ void init()
 	Vector3d target(0.0, 0.0, 0.0);
 	Vector3d up(0.0, 1.0, 0.0);
 	cam = new GLCamera(pos, target, up);
-	setupPointersByArray();
+	setupPointers();
 }
 
 void reshape(int w, int h)
@@ -937,8 +925,8 @@ int main(int argc, char * argv[])
 	glutCreateWindow("OpenGL");
 	init();
 	glutReshapeFunc(reshape);
-	glutDisplayFunc(display3);
-	glutIdleFunc(display3);  //设置不断调用显示函数
+	glutDisplayFunc(display2);
+	glutIdleFunc(display2);  //设置不断调用显示函数
 	glutMouseFunc(Mouse);
 	glutMotionFunc(onMouseMove);
 	glutMainLoop();
