@@ -45,7 +45,10 @@ Mesh mesh;
 int v_cnt;
 GLushort * item_indices;
 GLushort * wire_indices;
+// store vertices and sequence
 GLfloat * vertices;
+GLint * sequence;
+// vertices array for drawElements
 GLfloat * linesArray;
 GLfloat * verticesArray;
 
@@ -56,7 +59,7 @@ GLboolean mousemdown = GL_FALSE;
 
 vector<V3f> vertexVector;
 
-bool readPointers()
+bool readPoints()
 {
 	if (file_name.find(".hex") != file_name.size() - 4)
 	{
@@ -69,18 +72,20 @@ bool readPointers()
 	char   buffer[_INPUTLINESIZE_];
 	char * buff;
 	char * next_str;
-	unsigned int nv;
-	unsigned int nt;
+	unsigned int nv, nt, nf, ns;
 	int firstLineNumber;
 	lineCount = 0;
-	nv = 0;
-	nt = 0;
+	nv = 0;		// num of vertices
+	nf = 0;		// num float
+	nt = 0;		// num of tet
+	ns = 0;		// num of sequence
 	firstLineNumber = 1;
 
-	std::vector<typename MeshT::Point> pc;
-	std::vector<unsigned int>  vc;
 	double v[3];
 	int idx[9];
+
+	vertices = new GLfloat;
+	sequence = new GLint;
 
 	while ((buff = read_line_chars(buffer, fs, lineCount)) != NULL)
 	{
@@ -95,9 +100,8 @@ bool readPointers()
 					next_str = find_next_sub_str(next_str);
 					//std::istringstream ss(std::string(next_str));
 					//ss >> v[i];
-					v[i] = atof(next_str);
+					vertices[nf++] = atof(next_str);
 				}
-				pc.push_back(typename MeshT::Point(v[0], v[1], v[2]));
 				++nv;
 
 
@@ -112,7 +116,7 @@ bool readPointers()
 					//std::istringstream ss(std::string(next_str));
 					//ss >> idx[i];
 					idx[i] = atoi(next_str);
-					vc.push_back(idx[i] - 1);
+					sequence[ns++] = idx[i] - 1;
 				}
 				++nt;
 				//break;
@@ -121,7 +125,11 @@ bool readPointers()
 		} // end of if '#'
 	} // end of while
 	fs.close();
-	_mesh.set_points(pc);
+
+	v_cnt = nv;
+	cout << "Total vertices: " << v_cnt << endl;
+
+	return true;
 }
 
 void setupPointers()
@@ -270,12 +278,8 @@ void setupPointers()
 // 将顶点数据读取，并且为DrawArrays排序
 void setupPointersByArray()
 {
-	v_cnt = 0;
-
-
-	vertices = new GLfloat[v_cnt];
-
-	cout << "Total vertices: " << v_cnt << endl;
+	readPoints();
+	
 
 	/*glEnableClientState(GL_VERTEX_ARRAY);
 	glVertexPointer(3, GL_FLOAT, 0, vertices);*/
